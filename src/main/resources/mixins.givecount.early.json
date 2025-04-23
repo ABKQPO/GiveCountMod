@@ -2,7 +2,7 @@
   "required": true,
   "minVersion": "0.8.5-GTNH",
   "package": "givecount.mixins.early",
-  "refmap": "mixins.GiveCount.refmap.json",
+  "refmap": "mixins.givecount.refmap.json",
   "target": "@env(DEFAULT)",
   "compatibilityLevel": "JAVA_8",
   "mixins": [],

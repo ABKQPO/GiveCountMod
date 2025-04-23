@@ -39,7 +39,7 @@ public class GiveCountCoreMod implements IFMLLoadingPlugin, IEarlyMixinLoader {
 
     @Override
     public String getMixinConfig() {
-        return "mixins.GiveCount.early.json";
+        return "mixins.givecount.early.json";
     }
 
     @Override
