@@ -1,0 +1,19 @@
+{
+	"modListVersion": 2,
+	"modList": [{
+		"modid": "GiveCount",
+		"name": "givecount",
+		"description": "Just For Give Command and NEI Cheat Mode Count",
+		"version": "${modVersion}",
+		"mcversion": "1.7.10",
+		"url": "https://github.com/ABKQPO/GiveCountMod",
+		"authorList": ["HFstudio"],
+		"credits": "HFstudio",
+		"logoFile": "",
+		"screenshots": [],
+		"parent": "",
+		"dependencies": [],
+		"dependants": [],
+		"useDependencyInformation": false
+	}]
+}
