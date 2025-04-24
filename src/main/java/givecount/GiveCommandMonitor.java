@@ -1,4 +1,4 @@
-package main.java.givecount;
+package givecount;
 
 import java.io.File;
 

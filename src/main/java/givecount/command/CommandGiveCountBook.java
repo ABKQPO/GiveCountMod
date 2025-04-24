@@ -1,4 +1,4 @@
-package main.java.givecount;
+package givecount.command;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
