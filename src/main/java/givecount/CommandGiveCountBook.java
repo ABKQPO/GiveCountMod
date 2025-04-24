@@ -226,6 +226,6 @@ public class CommandGiveCountBook extends CommandBase {
 
     @Override
     public int getRequiredPermissionLevel() {
-        return 3;
+        return 1;
     }
 }
