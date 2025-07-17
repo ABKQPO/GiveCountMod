@@ -14,6 +14,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.world.World;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -36,12 +37,13 @@ public abstract class NEIServerUtils_Mixin {
     private static void afterGivePlayerItem(EntityPlayerMP player, ItemStack stack, boolean infinite, boolean doGive,
         CallbackInfo ci, int given) {
         if (!doGive || stack == null || stack.getItem() == null || given <= 0) return;
-        recordGiveAction(player, stack, given);
+        gcm$recordGiveAction(player, stack, given);
     }
 
-    private static void recordGiveAction(EntityPlayerMP player, ItemStack stack, int given) {
+    @Unique
+    private static void gcm$recordGiveAction(EntityPlayerMP player, ItemStack stack, int given) {
         String executor = player.getCommandSenderName();
-        String displayName = resolveDisplayName(stack);
+        String displayName = gcm$resolveDisplayName(stack);
         if (displayName == null) return;
 
         World world = player.getEntityWorld();
@@ -141,10 +143,8 @@ public abstract class NEIServerUtils_Mixin {
         }
     }
 
-    /**
-     * 从 ItemStack 构造注册名:meta 的形式
-     */
-    private static String resolveDisplayName(ItemStack stack) {
+    @Unique
+    private static String gcm$resolveDisplayName(ItemStack stack) {
         if (stack == null || stack.getItem() == null) return null;
         String regName = GameData.getItemRegistry()
             .getNameForObject(stack.getItem());
