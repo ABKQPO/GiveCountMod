@@ -1,6 +1,8 @@
 package givecount.mixins.early;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -11,6 +13,8 @@ import javax.xml.transform.stream.StreamResult;
 
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ChatComponentTranslation;
+import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.world.World;
 
 import org.spongepowered.asm.mixin.Mixin;
@@ -18,11 +22,11 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import codechicken.lib.inventory.InventoryUtils;
 import codechicken.nei.NEIServerUtils;
 import cpw.mods.fml.common.registry.GameData;
 
@@ -30,18 +34,45 @@ import cpw.mods.fml.common.registry.GameData;
 @Mixin(value = NEIServerUtils.class, remap = false)
 public abstract class NEIServerUtils_Mixin {
 
-    @Inject(
-        method = "givePlayerItem",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/inventory/Container;detectAndSendChanges()V"),
-        locals = LocalCapture.CAPTURE_FAILEXCEPTION)
+    @Inject(method = "givePlayerItem", at = @At("HEAD"), cancellable = true)
     private static void afterGivePlayerItem(EntityPlayerMP player, ItemStack stack, boolean infinite, boolean doGive,
-        CallbackInfo ci, int given) {
-        if (!doGive || stack == null || stack.getItem() == null || given <= 0) return;
-        gcm$recordGiveAction(player, stack, given);
+        CallbackInfo ci) {
+        if (stack == null || stack.getItem() == null) {
+            player.addChatComponentMessage(
+                NEIServerUtils
+                    .setColour(new ChatComponentTranslation("nei.chat.give.noitem"), EnumChatFormatting.WHITE));
+            ci.cancel();
+            return;
+        }
+
+        int given = stack.stackSize;
+        if (doGive) {
+            if (infinite) {
+                player.inventory.addItemStackToInventory(stack);
+            } else {
+                given -= InventoryUtils.insertItem(player.inventory, stack, false);
+            }
+        }
+
+        try {
+            gcm$recordGiveAction(player, stack, given);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        NEIServerUtils.sendNotice(
+            player,
+            new ChatComponentTranslation(
+                "commands.give.success",
+                stack.func_151000_E(),
+                infinite ? "\u221E" : Integer.toString(given),
+                player.getCommandSenderName()),
+            "notify-item");
+        player.openContainer.detectAndSendChanges();
+        ci.cancel();
     }
 
     @Unique
-    private static void gcm$recordGiveAction(EntityPlayerMP player, ItemStack stack, int given) {
+    private static void gcm$recordGiveAction(EntityPlayerMP player, ItemStack stack, int given) throws IOException {
         String executor = player.getCommandSenderName();
         String displayName = gcm$resolveDisplayName(stack);
         if (displayName == null) return;
@@ -54,6 +85,17 @@ public abstract class NEIServerUtils_Mixin {
 
         File usesFile = new File(gtDir, "player_give_count.xml");
         File itemsFile = new File(gtDir, "player_give_item.xml");
+
+        if (!usesFile.exists()) {
+            try (FileWriter writer = new FileWriter(usesFile)) {
+                writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<players></players>");
+            }
+        }
+        if (!itemsFile.exists()) {
+            try (FileWriter writer = new FileWriter(itemsFile)) {
+                writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<targets></targets>");
+            }
+        }
 
         long currentTime = System.currentTimeMillis();
 
