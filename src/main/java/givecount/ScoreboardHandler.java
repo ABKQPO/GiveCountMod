@@ -13,7 +13,6 @@ import net.minecraft.scoreboard.ScoreObjective;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.StatCollector;
-import net.minecraftforge.event.world.WorldEvent;
 
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -133,15 +132,6 @@ public class ScoreboardHandler {
             }
         } catch (Exception e) {
             e.printStackTrace();
-        }
-    }
-
-    @SubscribeEvent
-    public void onWorldUnload(WorldEvent.Unload event) {
-        if (!GiveCount.scoreboardEnabled && objective != null) {
-            Scoreboard sb = event.world.getScoreboard();
-            sb.func_96519_k(objective);
-            objective = null;
         }
     }
 }
