@@ -73,12 +73,11 @@ public class ScoreboardHandler {
             for (int dim = 0; dim < MinecraftServer.getServer().worldServers.length; dim++) {
                 Scoreboard sb = MinecraftServer.getServer().worldServers[dim].getScoreboard();
 
-                if (objective == null) {
+                if (sb.getObjective("GiveCount") != null) {
                     objective = sb.getObjective("GiveCount");
-                    if (objective == null) {
-                        objective = sb.addScoreObjective("GiveCount", new ScoreDummyCriteria("GiveCount"));
-                        sb.func_96530_a(1, objective);
-                    }
+                } else {
+                    objective = sb.addScoreObjective("GiveCount", new ScoreDummyCriteria("GiveCount"));
+                    sb.func_96530_a(1, objective);
                 }
 
                 String titleKey = "Scoreboard_GiveCount_0" + (mode - 1);
