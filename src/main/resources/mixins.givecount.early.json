@@ -5,7 +5,9 @@
   "refmap": "mixins.givecount.refmap.json",
   "target": "@env(DEFAULT)",
   "compatibilityLevel": "JAVA_8",
-  "mixins": [],
+  "mixins": [
+    "NEIServerUtils_Mixin"
+  ],
   "client": [],
   "server": []
 }

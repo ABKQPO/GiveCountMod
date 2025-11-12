@@ -1,24 +1,15 @@
 package givecount;
 
-import java.io.File;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-
 import net.minecraft.block.Block;
 import net.minecraft.command.CommandGive;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
 import net.minecraftforge.event.CommandEvent;
-
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
 
 import cpw.mods.fml.common.eventhandler.EventPriority;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
@@ -51,116 +42,61 @@ public class GiveCommandMonitor {
         }
 
         String displayName = resolveDisplayName(rawItem, meta);
-        if (count > 64) return;
-        if (displayName == null) return;
+        if (count > 64 || displayName == null) return;
 
         World world = senderPlayer.getEntityWorld();
-        File worldDir = world.getSaveHandler()
-            .getWorldDirectory();
-        File gtDir = new File(worldDir, "GiveCount");
-        if (!gtDir.exists()) gtDir.mkdirs();
+        if (!(world instanceof WorldServer worldServer)) return;
 
-        File usesFile = new File(gtDir, "player_give_count.xml");
-        File itemsFile = new File(gtDir, "player_give_item.xml");
+        GiveCountWorldData data = GiveCountWorldData.get(worldServer);
 
-        try {
-            long now = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
 
-            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-            DocumentBuilder db = dbf.newDocumentBuilder();
+        NBTTagCompound playerData = data.playerData;
+        NBTTagCompound executorTag = playerData.getCompoundTag(executor);
+        if (executorTag == null) executorTag = new NBTTagCompound();
 
-            Document docUses;
-            Element rootUses;
-            if (usesFile.exists()) {
-                docUses = db.parse(usesFile);
-                rootUses = docUses.getDocumentElement();
-            } else {
-                docUses = db.newDocument();
-                rootUses = docUses.createElement("players");
-                docUses.appendChild(rootUses);
-            }
-            Element playerEl = null;
-            for (int i = 0; i < rootUses.getElementsByTagName("player")
-                .getLength(); i++) {
-                Element el = (Element) rootUses.getElementsByTagName("player")
-                    .item(i);
-                if (el.getAttribute("name")
-                    .equals(executor)) {
-                    playerEl = el;
-                    break;
-                }
-            }
-            if (playerEl == null) {
-                playerEl = docUses.createElement("player");
-                playerEl.setAttribute("name", executor);
-                playerEl.setAttribute("uses", "0");
-                rootUses.appendChild(playerEl);
-            }
-            int prevUses = Integer.parseInt(playerEl.getAttribute("uses"));
-            playerEl.setAttribute("uses", String.valueOf(prevUses + 1));
-            playerEl.setAttribute("last_time", String.valueOf(now));
+        int uses = executorTag.getInteger("uses");
+        executorTag.setInteger("uses", uses + 1);
+        executorTag.setLong("last_time", now);
 
-            Transformer t = TransformerFactory.newInstance()
-                .newTransformer();
-            t.transform(new DOMSource(docUses), new StreamResult(usesFile));
-
-            Document docItems;
-            Element rootItems;
-            if (itemsFile.exists()) {
-                docItems = db.parse(itemsFile);
-                rootItems = docItems.getDocumentElement();
-            } else {
-                docItems = db.newDocument();
-                rootItems = docItems.createElement("targets");
-                docItems.appendChild(rootItems);
-            }
-            Element targetEl = null;
-            for (int i = 0; i < rootItems.getElementsByTagName("target")
-                .getLength(); i++) {
-                Element el = (Element) rootItems.getElementsByTagName("target")
-                    .item(i);
-                if (el.getAttribute("name")
-                    .equals(targetName)) {
-                    targetEl = el;
-                    break;
-                }
-            }
-            if (targetEl == null) {
-                targetEl = docItems.createElement("target");
-                targetEl.setAttribute("name", targetName);
-                rootItems.appendChild(targetEl);
-            }
-            Element itemEl = null;
-            for (int i = 0; i < targetEl.getElementsByTagName("item")
-                .getLength(); i++) {
-                Element el = (Element) targetEl.getElementsByTagName("item")
-                    .item(i);
-                if (el.getAttribute("name")
-                    .equals(displayName)) {
-                    itemEl = el;
-                    break;
-                }
-            }
-            if (itemEl == null) {
-                itemEl = docItems.createElement("item");
-                itemEl.setAttribute("name", displayName);
-                itemEl.setAttribute("count", "0");
-                targetEl.appendChild(itemEl);
-            }
-            int prevCount = Integer.parseInt(itemEl.getAttribute("count"));
-            itemEl.setAttribute("count", String.valueOf(prevCount + count));
-            itemEl.setAttribute("last_time", String.valueOf(now));
-
-            t.transform(new DOMSource(docItems), new StreamResult(itemsFile));
-
-        } catch (Exception e) {
-            e.printStackTrace();
+        if (!executorTag.hasKey("items")) {
+            executorTag.setTag("items", new NBTTagList());
         }
+        playerData.setTag(executor, executorTag);
+
+        NBTTagCompound targetTag = playerData.getCompoundTag(targetName);
+        if (targetTag == null) targetTag = new NBTTagCompound();
+
+        NBTTagList itemsList = targetTag.getTagList("items", 10);
+        boolean found = false;
+
+        for (int i = 0; i < itemsList.tagCount(); i++) {
+            NBTTagCompound itemTag = itemsList.getCompoundTagAt(i);
+            if (itemTag.getString("id")
+                .equals(displayName)) {
+                int prevCount = itemTag.getInteger("count");
+                itemTag.setInteger("count", prevCount + count);
+                itemTag.setLong("last_time", now);
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            NBTTagCompound newItem = new NBTTagCompound();
+            newItem.setString("id", displayName);
+            newItem.setInteger("count", count);
+            newItem.setLong("last_time", now);
+            itemsList.appendTag(newItem);
+        }
+
+        targetTag.setTag("items", itemsList);
+        playerData.setTag(targetName, targetTag);
+
+        data.playerData = playerData;
+        data.markDirty();
     }
 
-    /**
-     * 利用数字 ID + meta 构建 ItemStack
-     */
     private String resolveDisplayName(String raw, int meta) {
         ItemStack stack = null;
         if (raw.matches("\\d+")) {

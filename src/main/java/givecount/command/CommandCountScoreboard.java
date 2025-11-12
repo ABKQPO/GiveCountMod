@@ -1,7 +1,5 @@
 package givecount.command;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.util.Arrays;
 import java.util.List;
 
@@ -10,8 +8,9 @@ import net.minecraft.command.ICommandSender;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.StatCollector;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
 
-import givecount.GiveCount;
+import givecount.GiveCountWorldData;
 
 public class CommandCountScoreboard extends CommandBase {
 
@@ -28,7 +27,7 @@ public class CommandCountScoreboard extends CommandBase {
     @Override
     public void processCommand(ICommandSender sender, String[] args) {
         if (args.length == 0 || args.length > 2) {
-            sender.addChatMessage(new ChatComponentText("Usage: " + getCommandUsage(sender)));
+            sendUsage(sender);
             return;
         }
 
@@ -36,14 +35,14 @@ public class CommandCountScoreboard extends CommandBase {
         boolean disable = args[0].equalsIgnoreCase("disable");
 
         if (!enable && !disable) {
-            sender.addChatMessage(new ChatComponentText("Usage: " + getCommandUsage(sender)));
+            sendUsage(sender);
             return;
         }
 
-        int mode = 0; // 默认 disable 时为 0
+        int mode = 0;
         if (enable) {
             if (args.length != 2) {
-                sender.addChatMessage(new ChatComponentText("Usage: " + getCommandUsage(sender)));
+                sendUsage(sender);
                 return;
             }
 
@@ -59,35 +58,29 @@ public class CommandCountScoreboard extends CommandBase {
                     break;
                 default:
                     sender.addChatMessage(new ChatComponentText("Invalid mode: " + args[1]));
-                    sender.addChatMessage(new ChatComponentText("Valid modes: count, lasttime, moreitem"));
+                    sender.addChatMessage(new ChatComponentText("Valid modes: count, lasttime, mostitem"));
                     return;
             }
         }
 
-        GiveCount.scoreboardEnabled = enable;
+        World world = sender.getEntityWorld();
+        if (!(world instanceof WorldServer worldServer)) {
+            return;
+        }
+
+        GiveCountWorldData data = GiveCountWorldData.get(worldServer);
+        data.enabled = enable;
+        data.mode = mode;
+        data.markDirty();
 
         String msgKey = enable ? "Scoreboard_Enable_Success" : "Scoreboard_Disable_Success";
-        String localized = StatCollector.translateToLocal(msgKey);
-        sender.addChatMessage(new ChatComponentText(localized));
+        sender.addChatMessage(new ChatComponentText(StatCollector.translateToLocal(msgKey)));
 
-        try {
-            World world = sender.getEntityWorld();
-            File worldDir = world.getSaveHandler()
-                .getWorldDirectory();
-            File gtDir = new File(worldDir, "GiveCount");
-            if (!gtDir.exists()) gtDir.mkdirs();
+        System.out.println("[GiveCount] Scoreboard " + (enable ? "enabled" : "disabled") + ", mode=" + mode);
+    }
 
-            File jsonFile = new File(gtDir, "scoreboard.json");
-
-            String json = "{\n" + "  \"enabled\": " + enable + ",\n" + "  \"mode\": " + mode + "\n" + "}";
-
-            try (FileWriter writer = new FileWriter(jsonFile)) {
-                writer.write(json);
-            }
-        } catch (Exception e) {
-            sender.addChatMessage(new ChatComponentText("Failed to save scoreboard setting."));
-            e.printStackTrace();
-        }
+    private void sendUsage(ICommandSender sender) {
+        sender.addChatMessage(new ChatComponentText("Usage: " + getCommandUsage(sender)));
     }
 
     @Override

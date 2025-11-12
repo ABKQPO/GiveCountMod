@@ -1,188 +1,93 @@
 package givecount.mixins.early;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
 
-import codechicken.lib.inventory.InventoryUtils;
+import com.llamalad7.mixinextras.sugar.Local;
+
 import codechicken.nei.NEIServerUtils;
 import cpw.mods.fml.common.registry.GameData;
+import givecount.GiveCountWorldData;
 
-@SuppressWarnings("UnusedMixin")
 @Mixin(value = NEIServerUtils.class, remap = false)
 public abstract class NEIServerUtils_Mixin {
 
-    @Inject(method = "givePlayerItem", at = @At("HEAD"), cancellable = true)
+    @Inject(
+        method = "givePlayerItem",
+        at = @At(
+            value = "INVOKE",
+            target = "Lcodechicken/nei/NEIServerUtils;sendNotice(Lnet/minecraft/command/ICommandSender;Lnet/minecraft/util/IChatComponent;Ljava/lang/String;)V",
+            shift = At.Shift.BEFORE))
     private static void afterGivePlayerItem(EntityPlayerMP player, ItemStack stack, boolean infinite, boolean doGive,
-        CallbackInfo ci) {
-        if (stack == null || stack.getItem() == null) {
-            player.addChatComponentMessage(
-                NEIServerUtils
-                    .setColour(new ChatComponentTranslation("nei.chat.give.noitem"), EnumChatFormatting.WHITE));
-            ci.cancel();
-            return;
-        }
-
-        int given = stack.stackSize;
-        if (doGive) {
-            if (infinite) {
-                player.inventory.addItemStackToInventory(stack);
-            } else {
-                given -= InventoryUtils.insertItem(player.inventory, stack, false);
-            }
-        }
-
+        CallbackInfo ci, @Local(name = "given") int given) {
         try {
             gcm$recordGiveAction(player, stack, given);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        NEIServerUtils.sendNotice(
-            player,
-            new ChatComponentTranslation(
-                "commands.give.success",
-                stack.func_151000_E(),
-                infinite ? "\u221E" : Integer.toString(given),
-                player.getCommandSenderName()),
-            "notify-item");
-        player.openContainer.detectAndSendChanges();
-        ci.cancel();
     }
 
     @Unique
-    private static void gcm$recordGiveAction(EntityPlayerMP player, ItemStack stack, int given) throws IOException {
+    private static void gcm$recordGiveAction(EntityPlayerMP player, ItemStack stack, int given) {
+        if (stack == null || given <= 0) return;
+
         String executor = player.getCommandSenderName();
         String displayName = gcm$resolveDisplayName(stack);
         if (displayName == null) return;
 
         World world = player.getEntityWorld();
-        File worldDir = world.getSaveHandler()
-            .getWorldDirectory();
-        File gtDir = new File(worldDir, "GiveCount");
-        if (!gtDir.exists()) gtDir.mkdirs();
+        if (!(world instanceof WorldServer ws)) return;
 
-        File usesFile = new File(gtDir, "player_give_count.xml");
-        File itemsFile = new File(gtDir, "player_give_item.xml");
+        GiveCountWorldData data = GiveCountWorldData.get(ws);
+        long now = System.currentTimeMillis();
 
-        if (!usesFile.exists()) {
-            try (FileWriter writer = new FileWriter(usesFile)) {
-                writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<players></players>");
+        NBTTagCompound playerData = data.playerData;
+
+        NBTTagCompound executorTag = playerData.getCompoundTag(executor);
+        int uses = executorTag.getInteger("uses");
+        executorTag.setInteger("uses", uses + 1);
+        executorTag.setLong("last_time", now);
+
+        if (!executorTag.hasKey("items")) {
+            executorTag.setTag("items", new NBTTagList());
+        }
+        playerData.setTag(executor, executorTag);
+
+        NBTTagList items = executorTag.getTagList("items", 10);
+        boolean found = false;
+        for (int i = 0; i < items.tagCount(); i++) {
+            NBTTagCompound itemTag = items.getCompoundTagAt(i);
+            if (itemTag.getString("id")
+                .equals(displayName)) {
+                int prev = itemTag.getInteger("count");
+                itemTag.setInteger("count", prev + given);
+                itemTag.setLong("last_time", now);
+                found = true;
+                break;
             }
         }
-        if (!itemsFile.exists()) {
-            try (FileWriter writer = new FileWriter(itemsFile)) {
-                writer.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<targets></targets>");
-            }
+        if (!found) {
+            NBTTagCompound newItem = new NBTTagCompound();
+            newItem.setString("id", displayName);
+            newItem.setInteger("count", given);
+            newItem.setLong("last_time", now);
+            items.appendTag(newItem);
         }
+        executorTag.setTag("items", items);
+        playerData.setTag(executor, executorTag);
 
-        long currentTime = System.currentTimeMillis();
-
-        try {
-            DocumentBuilder db = DocumentBuilderFactory.newInstance()
-                .newDocumentBuilder();
-
-            // --- Handle player_give_count.xml ---
-            Document docUses = usesFile.exists() ? db.parse(usesFile) : db.newDocument();
-            Element rootUses = docUses.getDocumentElement();
-            if (rootUses == null) {
-                rootUses = docUses.createElement("players");
-                docUses.appendChild(rootUses);
-            }
-
-            Element playerEl = null;
-            NodeList players = rootUses.getElementsByTagName("player");
-            for (int i = 0; i < players.getLength(); i++) {
-                Element el = (Element) players.item(i);
-                if (el.getAttribute("name")
-                    .equals(executor)) {
-                    playerEl = el;
-                    break;
-                }
-            }
-            if (playerEl == null) {
-                playerEl = docUses.createElement("player");
-                playerEl.setAttribute("name", executor);
-                playerEl.setAttribute("uses", "0");
-                rootUses.appendChild(playerEl);
-            }
-            int prevUses = Integer.parseInt(playerEl.getAttribute("uses"));
-            playerEl.setAttribute("uses", String.valueOf(prevUses + 1));
-            playerEl.setAttribute("last_time", String.valueOf(currentTime));
-
-            Transformer t = TransformerFactory.newInstance()
-                .newTransformer();
-            t.transform(new DOMSource(docUses), new StreamResult(usesFile));
-
-            Document docItems = itemsFile.exists() ? db.parse(itemsFile) : db.newDocument();
-            Element rootItems = docItems.getDocumentElement();
-            if (rootItems == null) {
-                rootItems = docItems.createElement("targets");
-                docItems.appendChild(rootItems);
-            }
-
-            Element targetEl = null;
-            NodeList targets = rootItems.getElementsByTagName("target");
-            for (int i = 0; i < targets.getLength(); i++) {
-                Element el = (Element) targets.item(i);
-                if (el.getAttribute("name")
-                    .equals(executor)) {
-                    targetEl = el;
-                    break;
-                }
-            }
-            if (targetEl == null) {
-                targetEl = docItems.createElement("target");
-                targetEl.setAttribute("name", executor);
-                rootItems.appendChild(targetEl);
-            }
-
-            Element itemEl = null;
-            NodeList items = targetEl.getElementsByTagName("item");
-            for (int i = 0; i < items.getLength(); i++) {
-                Element el = (Element) items.item(i);
-                if (el.getAttribute("name")
-                    .equals(displayName)) {
-                    itemEl = el;
-                    break;
-                }
-            }
-            if (itemEl == null) {
-                itemEl = docItems.createElement("item");
-                itemEl.setAttribute("name", displayName);
-                itemEl.setAttribute("count", "0");
-                targetEl.appendChild(itemEl);
-            }
-            int prevCount = Integer.parseInt(itemEl.getAttribute("count"));
-            itemEl.setAttribute("count", String.valueOf(prevCount + given));
-            itemEl.setAttribute("last_time", String.valueOf(currentTime));
-
-            t.transform(new DOMSource(docItems), new StreamResult(itemsFile));
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        data.playerData = playerData;
+        data.markDirty();
     }
 
     @Unique
