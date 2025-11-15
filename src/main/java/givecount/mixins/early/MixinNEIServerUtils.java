@@ -20,7 +20,7 @@ import cpw.mods.fml.common.registry.GameData;
 import givecount.GiveCountWorldData;
 
 @Mixin(value = NEIServerUtils.class, remap = false)
-public abstract class NEIServerUtils_Mixin {
+public abstract class MixinNEIServerUtils {
 
     @Inject(
         method = "givePlayerItem",

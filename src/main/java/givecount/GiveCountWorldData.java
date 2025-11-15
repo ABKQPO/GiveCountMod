@@ -7,15 +7,18 @@ import net.minecraft.world.storage.MapStorage;
 
 public class GiveCountWorldData extends WorldSavedData {
 
-    public static final String DATA_NAME = "GiveCountWorldData";
+    private static final String DATA_NAME = "giveCountWorldData";
     public static GiveCountWorldData instance = new GiveCountWorldData();
 
     public boolean enabled = false;
     public int mode = 0;
     public NBTTagCompound playerData = new NBTTagCompound();
 
+    public int tickCounter;
+
     public GiveCountWorldData() {
         super(DATA_NAME);
+        this.markDirty();
     }
 
     public GiveCountWorldData(String name) {
@@ -36,15 +39,28 @@ public class GiveCountWorldData extends WorldSavedData {
 
     @Override
     public void readFromNBT(NBTTagCompound nbt) {
-        enabled = nbt.getBoolean("enabled");
-        mode = nbt.getInteger("mode");
-        playerData = nbt.getCompoundTag("playerData");
+        NBTTagCompound data = nbt.getCompoundTag("giveCountData");
+        enabled = data.getBoolean("enabled");
+        mode = data.getInteger("mode");
+        playerData = data.getCompoundTag("playerData");
     }
 
     @Override
     public void writeToNBT(NBTTagCompound nbt) {
-        nbt.setBoolean("enabled", enabled);
-        nbt.setInteger("mode", mode);
-        nbt.setTag("playerData", playerData);
+        NBTTagCompound data = new NBTTagCompound();
+
+        data.setBoolean("enabled", enabled);
+        data.setInteger("mode", mode);
+        data.setTag("playerData", playerData);
+
+        nbt.setTag("giveCountData", data);
+    }
+
+    public void tick() {
+        ++this.tickCounter;
+
+        if (this.tickCounter % 400 == 0) {
+            this.markDirty();
+        }
     }
 }
