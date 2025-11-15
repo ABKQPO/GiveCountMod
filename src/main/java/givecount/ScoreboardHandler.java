@@ -21,73 +21,67 @@ public class ScoreboardHandler {
 
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase == TickEvent.Phase.END) return;
+
+        if (event.phase != TickEvent.Phase.END) return;
 
         GiveCountWorldData.instance.tick();
 
         if (++tickCounter < 20) return;
         tickCounter = 0;
 
-        try {
-            MinecraftServer server = MinecraftServer.getServer();
-            if (server == null || server.worldServers == null || server.worldServers.length == 0) return;
+        MinecraftServer server = MinecraftServer.getServer();
+        if (server == null || server.worldServers.length == 0) return;
 
-            WorldServer overworld = server.worldServers[0];
-            GiveCountWorldData data = GiveCountWorldData.get(overworld);
+        WorldServer overworld = server.worldServers[0];
+        GiveCountWorldData data = GiveCountWorldData.get(overworld);
 
-            if (!data.enabled) return;
-            int mode = data.mode;
+        if (!data.enabled) return;
 
-            Scoreboard sb = overworld.getScoreboard();
+        Scoreboard sb = overworld.getScoreboard();
+        int mode = data.mode;
 
-            for (int i = 0; i < 3; i++) {
-                String objName = "giveCount" + (i + 1);
-                ScoreObjective obj = sb.getObjective(objName);
-                if (obj == null) {
-                    obj = sb.addScoreObjective(objName, IScoreObjectiveCriteria.field_96641_b);
-                }
-                cached[i] = obj;
-                sb.func_96530_a(i, obj);
+        for (int i = 0; i < 3; i++) {
+            String objName = "giveCount" + (i + 1);
+            ScoreObjective obj = sb.getObjective(objName);
+            if (obj == null) {
+                obj = sb.addScoreObjective(objName, IScoreObjectiveCriteria.field_96641_b);
             }
+            cached[i] = obj;
+        }
 
-            ScoreObjective objective = cached[mode - 1];
+        ScoreObjective objective = cached[mode - 1];
 
-            String titleKey = "Scoreboard_GiveCount_0" + (mode - 1);
-            objective.setDisplayName(StatCollector.translateToLocal(titleKey));
+        sb.func_96530_a(data.displaySlot, objective);
 
-            NBTTagCompound playerData = data.playerData;
+        String titleKey = "Scoreboard_GiveCount_0" + (mode - 1);
+        objective.setDisplayName(StatCollector.translateToLocal(titleKey));
 
-            for (Object key : playerData.func_150296_c()) {
-                if (!(key instanceof String playerName)) continue;
+        NBTTagCompound playerData = data.playerData;
 
-                NBTTagCompound playerTag = playerData.getCompoundTag(playerName);
-                Score score = sb.func_96529_a(playerName, objective);
+        for (Object key : playerData.func_150296_c()) {
+            if (!(key instanceof String playerName)) continue;
 
-                if (mode == 1) {
-                    int uses = playerTag.getInteger("uses");
-                    score.setScorePoints(uses);
+            NBTTagCompound playerTag = playerData.getCompoundTag(playerName);
+            Score score = sb.func_96529_a(playerName, objective);
 
-                } else if (mode == 2) {
-                    long lastTime = playerTag.getLong("last_time");
-                    long currentTime = System.currentTimeMillis();
-                    long diff = (currentTime - lastTime) / 1000;
-                    if (diff < 0) diff = 0;
-                    score.setScorePoints((int) diff);
+            if (mode == 1) {
+                score.setScorePoints(playerTag.getInteger("uses"));
 
-                } else if (mode == 3) {
-                    NBTTagList items = playerTag.getTagList("items", 10);
-                    int totalCount = 0;
-                    for (int i = 0; i < items.tagCount(); i++) {
-                        totalCount += items.getCompoundTagAt(i)
-                            .getInteger("count");
-                    }
-                    score.setScorePoints(totalCount);
+            } else if (mode == 2) {
+                long lastTime = playerTag.getLong("last_time");
+                long diff = (System.currentTimeMillis() - lastTime) / 1000;
+                if (diff < 0) diff = 0;
+                score.setScorePoints((int) diff);
+
+            } else if (mode == 3) {
+                NBTTagList items = playerTag.getTagList("items", 10);
+                int total = 0;
+                for (int i = 0; i < items.tagCount(); i++) {
+                    total += items.getCompoundTagAt(i)
+                        .getInteger("count");
                 }
+                score.setScorePoints(total);
             }
-
-        } catch (Exception e) {
-            System.err.print("Give Count Scoreboard Error, Check Stack Trace");
-            e.printStackTrace();
         }
     }
 }

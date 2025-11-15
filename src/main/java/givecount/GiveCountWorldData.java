@@ -12,6 +12,7 @@ public class GiveCountWorldData extends WorldSavedData {
 
     public boolean enabled = false;
     public int mode = 0;
+    public int displaySlot = 1;
     public NBTTagCompound playerData = new NBTTagCompound();
 
     public int tickCounter;
@@ -42,6 +43,7 @@ public class GiveCountWorldData extends WorldSavedData {
         NBTTagCompound data = nbt.getCompoundTag("giveCountData");
         enabled = data.getBoolean("enabled");
         mode = data.getInteger("mode");
+        displaySlot = data.getInteger("displaySlot");
         playerData = data.getCompoundTag("playerData");
     }
 
@@ -51,6 +53,7 @@ public class GiveCountWorldData extends WorldSavedData {
 
         data.setBoolean("enabled", enabled);
         data.setInteger("mode", mode);
+        data.setInteger("displaySlot", displaySlot);
         data.setTag("playerData", playerData);
 
         nbt.setTag("giveCountData", data);
